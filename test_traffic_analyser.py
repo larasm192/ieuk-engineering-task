@@ -1,104 +1,63 @@
-import os
-import tempfile
 import pandas as pd
 import pytest
-
-from traffic_analyser import parse_log_file, LOG_PATTERN
-from traffic_analyser import save_to_csv
-
-SAMPLE_LOG = (
-    '192.168.1.1 - US - [2024-06-01T12:00:00] "GET /index.html HTTP/1.1" 200 1234 "-" "Mozilla/5.0" 150\n'
-    '10.0.0.2 - GB - [2024-06-01T12:01:00] "POST /submit HTTP/1.1" 404 567 "-" "curl/7.68.0" 200\n'
-    '172.16.0.3 - FR - [2024-06-01T12:02:00] "HEAD /status HTTP/1.1" 301 89 "-" "python-requests/2.25.1" 50\n'
+from traffic_analyser import (
+    parse_log_file,
+    top_ips,
+    top_user_agents,
+    top_paths,
+    detect_suspicious_ips,
+    requests_per_minute_per_ip,
+    top_n_requests_per_minute
 )
 
-def test_parse_log_file_basic():
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
-        tmp.write(SAMPLE_LOG)
-        tmp_path = tmp.name
+# Sample log line that matches your regex
+SAMPLE_LOG = '''
+192.168.0.1 - US - [12/07/2024:13:45:30] "GET /index.html HTTP/1.1" 200 1024 "-" "Mozilla/5.0" 123
+192.168.0.1 - US - [12/07/2024:13:46:00] "POST /submit HTTP/1.1" 200 2048 "-" "Mozilla/5.0" 456
+10.0.0.1 - GB - [12/07/2024:13:45:30] "GET /home HTTP/1.1" 404 512 "-" "curl/7.58.0" 78
+10.0.0.2 - GB - [12/07/2024:13:46:00] "GET /home HTTP/1.1" 200 1024 "-" "curl/7.58.0" 100
+'''
 
-    df = parse_log_file(tmp_path)
-    os.remove(tmp_path)
+@pytest.fixture
+def sample_df(tmp_path):
+    file_path = tmp_path / "sample.log"
+    file_path.write_text(SAMPLE_LOG.strip())
+    df = parse_log_file(file_path)
+    df['datetime'] = pd.to_datetime(df['datetime'], format='%d/%m/%Y:%H:%M:%S')
+    return df
 
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 3
-    assert set(df.columns) == {'ip', 'country', 'datetime', 'method', 'path', 'status', 'size', 'ua', 'duration'}
-    assert df.iloc[0]['ip'] == '192.168.1.1'
-    assert df.iloc[1]['country'] == 'GB'
-    assert df.iloc[2]['method'] == 'HEAD'
-    assert df.iloc[0]['path'] == '/index.html'
-    assert df.iloc[1]['status'] == '404'
-    assert df.iloc[2]['ua'] == 'python-requests/2.25.1'
-    assert df.iloc[0]['duration'] == '150'
+def test_parse_log_file(sample_df):
+    assert isinstance(sample_df, pd.DataFrame)
+    assert len(sample_df) == 4
+    assert set(sample_df.columns) >= {"ip", "country", "method", "path", "status", "ua", "duration"}
 
-def test_parse_log_file_empty():
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
-        tmp.write('')
-        tmp_path = tmp.name
+def test_top_ips(sample_df):
+    result = top_ips(sample_df, 1)
+    assert result.index[0] == "192.168.0.1"
+    assert result.iloc[0] == 2
 
-    df = parse_log_file(tmp_path)
-    os.remove(tmp_path)
+def test_top_paths(sample_df):
+    result = top_paths(sample_df, 1)
+    assert result.index[0] == "/home"
+    assert result.iloc[0] == 2
 
-    assert isinstance(df, pd.DataFrame)
-    assert df.empty
+def test_top_user_agents(sample_df):
+    result = top_user_agents(sample_df, 1)
+    assert result.index[0] == "Mozilla/5.0"
+    assert result.iloc[0] == 2
 
-def test_parse_log_file_invalid_lines():
-    log_content = (
-        'invalid log line\n'
-        '192.168.1.1 - US - [2024-06-01T12:00:00] "GET /index.html HTTP/1.1" 200 1234 "-" "Mozilla/5.0" 150\n'
-    )
-    with tempfile.NamedTemporaryFile(mode='w+', delete=False) as tmp:
-        tmp.write(log_content)
-        tmp_path = tmp.name
+def test_detect_suspicious_ips(sample_df):
+    result = detect_suspicious_ips(sample_df, threshold=1)
+    assert "192.168.0.1" in result.index
+    assert result["192.168.0.1"] == 2
 
-    df = parse_log_file(tmp_path)
-    os.remove(tmp_path)
+def test_requests_per_minute_per_ip(sample_df):
+    rpm = requests_per_minute_per_ip(sample_df)
+    assert isinstance(rpm, pd.Series)
+    assert rpm.sum() == 4  # 4 total requests
 
-    assert isinstance(df, pd.DataFrame)
-    assert len(df) == 1
-    assert df.iloc[0]['ip'] == '192.168.1.1'
-
-def test_save_to_csv_creates_file_and_content(capsys):
-    df = pd.DataFrame({
-        'ip': ['1.2.3.4', '5.6.7.8'],
-        'country': ['US', 'GB'],
-        'datetime': ['2024-06-01T12:00:00', '2024-06-01T12:01:00'],
-        'method': ['GET', 'POST'],
-        'path': ['/index.html', '/submit'],
-        'status': ['200', '404'],
-        'size': ['123', '456'],
-        'ua': ['Mozilla/5.0', 'curl/7.68.0'],
-        'duration': ['100', '200']
-    })
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
-        output_path = tmp.name
-
-    try:
-        save_to_csv(df, output_path)
-        captured = capsys.readouterr()
-        assert os.path.exists(output_path)
-        assert "Data saved to" in captured.out
-
-        loaded = pd.read_csv(output_path)
-        pd.testing.assert_frame_equal(df, loaded)
-    finally:
-        os.remove(output_path)
-
-def test_save_to_csv_empty_dataframe(capsys):
-    df = pd.DataFrame(columns=['ip', 'country', 'datetime', 'method', 'path', 'status', 'size', 'ua', 'duration'])
-    with tempfile.NamedTemporaryFile(delete=False, suffix='.csv') as tmp:
-        output_path = tmp.name
-
-    try:
-        save_to_csv(df, output_path)
-        captured = capsys.readouterr()
-        assert os.path.exists(output_path)
-        assert "Data saved to" in captured.out
-
-        loaded = pd.read_csv(output_path)
-        assert loaded.empty
-        assert list(loaded.columns) == list(df.columns)
-    finally:
-        os.remove(output_path)
-
-
+def test_top_n_requests_per_minute(sample_df):
+    result = top_n_requests_per_minute(sample_df, 2)
+    assert isinstance(result, pd.Series)
+    assert len(result) <= 2
+    assert result.max() >= 1

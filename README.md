@@ -2,7 +2,7 @@
 
 ## 📘 Project Overview
 
-This project analyses server log files for a music media startup experiencing periodic downtime due to high traffic. Following the success of their podcast and newsletter, the website began receiving tens of thousands of requests, many suspected to be non-human. 
+This project analyses server log files for a music media startup experiencing periodic downtime due to high traffic. Following the success of their podcast and newsletter, the website began receiving tens of thousands of requests, many suspected to be non-human.
 
 With a small engineering team and limited resources, the goal was to investigate traffic patterns, detect potential bots, and propose mitigation strategies to reduce server strain and improve reliability.
 
