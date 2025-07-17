@@ -76,7 +76,7 @@ def requests_per_minute_per_ip(df):
     '''
     df['datetime'] = pd.to_datetime(df['datetime'], format='%d/%m/%Y:%H:%M:%S')
     df.set_index('datetime', inplace=True)
-    rpm = df.groupby([pd.Grouper(freq='T'), 'ip']).size()
+    rpm = df.groupby([pd.Grouper(freq='min'), 'ip']).size()
     return rpm
 
 def top_n_requests_per_minute(df, n=20):
