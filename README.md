@@ -1,24 +1,41 @@
-# Traffic Analyser
+# 🚦 Traffic Log Analyser – Bot Detection & Traffic Insights
 
-## Brief
+## 📘 Project Overview
 
-You've been hired by a small music
-media startup. Their successful
-podcast and newsletter have led to a
-spike in traffic, initially bringing a
-welcome increase in subscriptions.
+This project analyses server log files for a music media startup experiencing periodic downtime due to high traffic. Following the success of their podcast and newsletter, the website began receiving tens of thousands of requests, many suspected to be non-human. 
 
-However, concerns are growing that some
-traffic may be non-human, and the servers
-are becoming overwhelmed.
-Parts of the website go down every few
-days due to the sheer volume of traffic.
-With an engineering team of just three
-people, this downtime is severely
-impacting their productivity.
+With a small engineering team and limited resources, the goal was to investigate traffic patterns, detect potential bots, and propose mitigation strategies to reduce server strain and improve reliability.
 
-Your task is to solve this issue:
+---
 
-Using a provided set of logs, you must
-identify the problem and determine the
-best way to handle the increased traffic.
+## 🎯 Objectives
+
+- Parse and structure raw web server logs
+- Identify high-traffic IP addresses and access patterns
+- Detect potential bots based on behavior (volume, frequency, repetition)
+- Generate a structured dataset for analysis
+- Provide actionable recommendations for handling non-human traffic
+
+---
+
+## 🧠 Key Questions Addressed
+
+- Which IPs are generating the most requests?
+- Are certain pages being accessed far more than others?
+- Are bots or scrapers repeatedly targeting specific endpoints?
+- What distinguishes legitimate user traffic from automated activity?
+
+---
+
+## 🛠 Solution Summary
+
+- Built a Python-based log parser using `re` and `pandas`
+- Extracted fields such as IP address, country, timestamp, path, HTTP method, status, user-agent, and request duration
+- Created utility functions to:
+  - Count top IPs, user-agents, and request paths
+  - Detect suspicious behavior based on:
+    - High request volume
+    - Low time intervals between requests
+    - Excessive requests to the same path
+    - Duplicate or missing user-agent strings
+- Exported cleaned data to CSV for further analysis
